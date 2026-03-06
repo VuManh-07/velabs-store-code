@@ -38,10 +38,26 @@ pipeline {
             steps {
                 sh '''
                     rm -f /tmp/uart_lab01.log
-                    echo "[SIM] Starting Renode simulation..."
-                    renode --disable-xwt --console \
-                        -e "$bin=@build/lab01-gpio.elf; $uart_log=@/tmp/uart_lab01.log" \
+
+                    # Tìm renode trong các vị trí phổ biến
+                    RENODE_BIN=""
+                    for p in /opt/renode/renode /usr/local/bin/renode /usr/bin/renode; do
+                        if [ -x "$p" ]; then
+                            RENODE_BIN="$p"
+                            break
+                        fi
+                    done
+                    if [ -z "$RENODE_BIN" ]; then
+                        echo "[ERROR] renode not found!"
+                        exit 1
+                    fi
+                    echo "[SIM] Using renode: $RENODE_BIN"
+
+                    "$RENODE_BIN" --disable-xwt --console \
+                        --execute '$bin=@build/lab01-gpio.elf' \
+                        --execute '$uart_log=@/tmp/uart_lab01.log' \
                         sim/run.resc || true
+
                     echo "[SIM] Simulation complete."
                     echo "--- UART Output ---"
                     cat /tmp/uart_lab01.log 2>/dev/null || echo "(no uart log)"

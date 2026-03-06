@@ -1,5 +1,5 @@
 #include "uart.h"
-#include "../../common/stm32f4xx.h"
+#include "stm32f4xx.h"
 
 /* USART2: PA2=TX, PA3=RX — 115200 baud @ 16 MHz (HSI) */
 #define APB1_CLOCK_HZ   16000000UL

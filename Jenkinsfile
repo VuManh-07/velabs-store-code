@@ -6,54 +6,61 @@ pipeline {
         timestamps()
         ansiColor('xterm')
         skipDefaultCheckout(true)
-    }
-
-    environment {
-        LAB_NAME       = 'lab01-gpio'
-        LAB_DIR        = 'stm32-labs/lab01-gpio'
-        FIRMWARE_ELF   = 'stm32-labs/lab01-gpio/build/lab01-gpio.elf'
-        UART_LOG       = '/tmp/uart_lab01.log'
-        SUBMISSION_ID  = "${env.BRANCH_NAME}-${env.GIT_COMMIT?.take(7) ?: 'unknown'}-${env.BUILD_NUMBER}"
-        RESULT_SERVER  = "${env.RESULT_SERVER_URL ?: 'http://result-server:8000'}"
+        skipStagesAfterUnstable()
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${env.BRANCH_NAME}"]],
-                    extensions: [[$class: 'CloneOption', depth: 1, shallow: true]],
-                    userRemoteConfigs: scm.userRemoteConfigs
-                ])
-                echo "Branch: ${env.BRANCH_NAME} | Commit: ${env.GIT_COMMIT?.take(7)}"
+                checkout scm
+                script {
+                    // GIT_COMMIT chỉ có sau khi checkout xong
+                    def shortCommit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.SHORT_COMMIT = shortCommit
+                    env.SUBMISSION_ID = "${env.BRANCH_NAME}-${shortCommit}-${env.BUILD_NUMBER}"
+                }
+                echo "Branch: ${env.BRANCH_NAME} | Commit: ${env.SHORT_COMMIT} | ID: ${env.SUBMISSION_ID}"
             }
         }
 
         stage('Build') {
             steps {
-                dir(env.LAB_DIR) {
-                    sh '''
-                        echo "[BUILD] Compiling ${LAB_NAME}..."
-                        make clean && make -j$(nproc)
-                        echo "[BUILD] Done."
-                        arm-none-eabi-size build/${LAB_NAME}.elf
-                    '''
-                }
+                sh '''
+                    echo "[BUILD] Compiling lab01-gpio..."
+                    make clean && make -j$(nproc)
+                    echo "[BUILD] Done."
+                    arm-none-eabi-size build/lab01-gpio.elf
+                '''
             }
         }
 
         stage('Simulate') {
             steps {
                 sh '''
-                    rm -f ${UART_LOG}
-                    echo "[SIM] Starting Renode simulation..."
-                    renode --disable-xwt --console \
-                        -e "\\$bin=@${FIRMWARE_ELF}; \\$uart_log=@${UART_LOG}" \
-                        ${LAB_DIR}/sim/run.resc || true
+                    rm -f /tmp/uart_lab01.log
+
+                    # Tìm renode trong các vị trí phổ biến
+                    RENODE_BIN=""
+                    for p in /opt/renode/renode /usr/local/bin/renode /usr/bin/renode; do
+                        if [ -x "$p" ]; then
+                            RENODE_BIN="$p"
+                            break
+                        fi
+                    done
+                    if [ -z "$RENODE_BIN" ]; then
+                        echo "[ERROR] renode not found!"
+                        exit 1
+                    fi
+                    echo "[SIM] Using renode: $RENODE_BIN"
+
+                    "$RENODE_BIN" --disable-xwt --console \
+                        --execute '$bin=@build/lab01-gpio.elf' \
+                        --execute '$uart_log=@/tmp/uart_lab01.log' \
+                        sim/run.resc || true
+
                     echo "[SIM] Simulation complete."
                     echo "--- UART Output ---"
-                    cat ${UART_LOG} 2>/dev/null || echo "(no uart log)"
+                    cat /tmp/uart_lab01.log 2>/dev/null || echo "(no uart log)"
                 '''
             }
         }
@@ -63,8 +70,10 @@ pipeline {
                 script {
                     def uartLog = ''
                     try {
-                        uartLog = sh(script: "cat ${env.UART_LOG} 2>/dev/null || echo ''", returnStdout: true).trim()
-                    } catch (e) { uartLog = '' }
+                        uartLog = sh(script: 'cat /tmp/uart_lab01.log 2>/dev/null || echo ""', returnStdout: true).trim()
+                    } catch (e) {
+                        uartLog = ''
+                    }
 
                     def verdict = 'UNKNOWN'
                     if (uartLog.contains('TEST PASSED'))      verdict = 'PASS'
@@ -76,19 +85,20 @@ pipeline {
 
                     def payload = groovy.json.JsonOutput.toJson([
                         submission_id : env.SUBMISSION_ID,
-                        lab           : env.LAB_NAME,
                         branch        : env.BRANCH_NAME,
-                        commit        : env.GIT_COMMIT?.take(7) ?: 'unknown',
+                        commit_hash   : env.SHORT_COMMIT,
                         build_number  : env.BUILD_NUMBER,
+                        timestamp     : new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC')),
+                        arch          : 'arm',
                         verdict       : verdict,
-                        pass_count    : passCount,
-                        fail_count    : failCount,
-                        uart_log      : uartLog,
-                        timestamp     : new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))
+                        duration_ms   : 0,
+                        test_cases    : [],
+                        log_url       : "${env.BUILD_URL}console",
+                        jenkins_url   : env.BUILD_URL ?: ''
                     ])
 
                     sh """
-                        curl -s -X POST ${env.RESULT_SERVER}/api/results \
+                        curl -s -X POST http://result-server:8000/api/results \
                             -H 'Content-Type: application/json' \
                             -d '${payload}' || echo '[WARN] Result server unreachable'
                     """
@@ -104,8 +114,8 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: "${env.LAB_DIR}/build/*.elf", allowEmptyArchive: true
-            sh "rm -f ${env.UART_LOG}"
+            archiveArtifacts artifacts: 'build/*.elf', allowEmptyArchive: true
+            sh 'rm -f /tmp/uart_lab01.log'
         }
     }
 }

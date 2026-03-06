@@ -6,6 +6,7 @@ pipeline {
         timestamps()
         ansiColor('xterm')
         skipDefaultCheckout(true)
+        skipStagesAfterUnstable()
     }
 
     stages {
@@ -13,9 +14,12 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    env.SUBMISSION_ID = "${env.BRANCH_NAME}-${env.GIT_COMMIT.take(7)}-${env.BUILD_NUMBER}"
+                    // GIT_COMMIT chỉ có sau khi checkout xong
+                    def shortCommit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.SHORT_COMMIT = shortCommit
+                    env.SUBMISSION_ID = "${env.BRANCH_NAME}-${shortCommit}-${env.BUILD_NUMBER}"
                 }
-                echo "Branch: ${env.BRANCH_NAME} | Commit: ${env.GIT_COMMIT.take(7)} | ID: ${env.SUBMISSION_ID}"
+                echo "Branch: ${env.BRANCH_NAME} | Commit: ${env.SHORT_COMMIT} | ID: ${env.SUBMISSION_ID}"
             }
         }
 
@@ -66,7 +70,7 @@ pipeline {
                     def payload = groovy.json.JsonOutput.toJson([
                         submission_id : env.SUBMISSION_ID,
                         branch        : env.BRANCH_NAME,
-                        commit_hash   : env.GIT_COMMIT.take(7),
+                        commit_hash   : env.SHORT_COMMIT,
                         build_number  : env.BUILD_NUMBER,
                         timestamp     : new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC')),
                         arch          : 'arm',
@@ -94,10 +98,8 @@ pipeline {
 
     post {
         always {
-            node('renode-agent') {
-                archiveArtifacts artifacts: 'build/*.elf', allowEmptyArchive: true
-                sh 'rm -f /tmp/uart_lab01.log'
-            }
+            archiveArtifacts artifacts: 'build/*.elf', allowEmptyArchive: true
+            sh 'rm -f /tmp/uart_lab01.log'
         }
     }
 }

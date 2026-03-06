@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include "../../common/stm32f4xx.h"
+#include "stm32f4xx.h"
 #include "uart.h"
 #include "gpio.h"
 

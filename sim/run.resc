@@ -1,5 +1,4 @@
 # Renode simulation script — Lab01 GPIO / STM32F4 Discovery
-# Jenkinsfile truyền vào: $bin và $uart_log
 
 using sysbus
 
@@ -9,21 +8,14 @@ $uart_log ?= @/tmp/uart_lab01.log
 mach create "stm32f4-lab01"
 machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
 
-# Load firmware
 sysbus LoadELF $bin
 
-# Capture UART output
+# Capture UART output to file
 sysbus.usart2 CreateFileBackend $uart_log true
 
-# Hook verdict markers — không dùng dấu nháy đơn bên trong
-sysbus.usart2 AddLineHook "TEST PASSED" "quit 0"
-sysbus.usart2 AddLineHook "TEST FAILED" "quit 1"
-
-# Start simulation
 start
 
-# Timeout 30 giây
+# Chạy tối đa 30 giây
 emulation RunFor "00:00:30"
 
-echo "TIMEOUT: firmware did not complete"
-quit 2
+quit

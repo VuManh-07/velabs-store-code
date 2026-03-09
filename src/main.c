@@ -13,48 +13,57 @@ static int test_fail = 0;
         else       { uart_puts(name ":FAIL\r\n"); test_fail++; } \
     } while(0)
 
-/* ── TODO: Sinh viên hoàn thành các hàm dưới đây ────────────────────────── */
+/* ── Implementation ──────────────────────────────────────────────────────── */
 
 void gpio_init(void) {
-    /* TODO: Bật clock GPIOD (RCC_AHB1ENR bit 3) */
+    /* Bật clock GPIOD */
+    SET_BIT(RCC_AHB1ENR, RCC_AHB1ENR_GPIODEN);
 
-    /* TODO: Cấu hình PD12, PD13, PD14, PD15 là output (MODER = 01) */
+    /* PD12–PD15: output mode (MODER = 01) */
+    GPIOD->MODER &= ~((0x3U << (12*2)) | (0x3U << (13*2)) |
+                      (0x3U << (14*2)) | (0x3U << (15*2)));
+    GPIOD->MODER |=  ((GPIO_MODER_OUTPUT << (12*2)) |
+                      (GPIO_MODER_OUTPUT << (13*2)) |
+                      (GPIO_MODER_OUTPUT << (14*2)) |
+                      (GPIO_MODER_OUTPUT << (15*2)));
 
-    /* TODO: Bật clock GPIOA (RCC_AHB1ENR bit 0) */
+    /* Bật clock GPIOA */
+    SET_BIT(RCC_AHB1ENR, RCC_AHB1ENR_GPIOAEN);
 
-    /* TODO: Cấu hình PA2 là AF mode (MODER = 10) cho USART2 */
-    /* TODO: Set PA2 AFR = AF7 (USART2) */
+    /* PA2: AF mode cho USART2 TX */
+    GPIOA->MODER &= ~(0x3U << (2*2));
+    GPIOA->MODER |=  (GPIO_MODER_AF << (2*2));
+    GPIOA->AFR[0] &= ~(0xFU << (4*2));
+    GPIOA->AFR[0] |=  (7U   << (4*2));  /* AF7 = USART2 */
 }
 
 void led_set(uint8_t pin, uint8_t state) {
-    /* TODO: Nếu state != 0, set bit 'pin' trong GPIOD->ODR
-             Nếu state == 0, clear bit 'pin' trong GPIOD->ODR */
-    (void)pin; (void)state;
+    if (state) {
+        GPIOD->ODR |=  (1U << pin);
+    } else {
+        GPIOD->ODR &= ~(1U << pin);
+    }
 }
 
 void led_toggle(uint8_t pin) {
-    /* TODO: XOR bit 'pin' trong GPIOD->ODR */
-    (void)pin;
+    GPIOD->ODR ^= (1U << pin);
 }
 
 /* ── Test cases ──────────────────────────────────────────────────────────── */
 
 static void tc1_led_set_on(void) {
-    /* Bật LED PD12, kiểm tra bit 12 trong ODR */
     led_set(12, 1);
     ASSERT("TC1", READ_BIT(GPIOD->ODR, (1U << 12)) != 0);
 }
 
 static void tc2_led_toggle(void) {
-    /* Toggle PD13 2 lần → phải về trạng thái ban đầu (off) */
-    GPIOD->ODR &= ~(1U << 13);   /* đảm bảo ban đầu là off */
-    led_toggle(13);               /* on */
-    led_toggle(13);               /* off */
+    GPIOD->ODR &= ~(1U << 13);
+    led_toggle(13);
+    led_toggle(13);
     ASSERT("TC2", READ_BIT(GPIOD->ODR, (1U << 13)) == 0);
 }
 
 static void tc3_all_leds_on(void) {
-    /* Bật tất cả 4 LED (PD12–PD15) */
     led_set(12, 1); led_set(13, 1);
     led_set(14, 1); led_set(15, 1);
     uint32_t mask = (1U<<12)|(1U<<13)|(1U<<14)|(1U<<15);
@@ -62,7 +71,6 @@ static void tc3_all_leds_on(void) {
 }
 
 static void tc4_all_leds_off(void) {
-    /* Tắt tất cả 4 LED */
     led_set(12, 0); led_set(13, 0);
     led_set(14, 0); led_set(15, 0);
     uint32_t mask = (1U<<12)|(1U<<13)|(1U<<14)|(1U<<15);

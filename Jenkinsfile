@@ -98,7 +98,7 @@ pipeline {
                     ])
 
                     sh """
-                        curl -s -X POST http://result-server:8000/api/results \
+                        curl -s -X POST http://localhost:8000/api/results \
                             -H 'Content-Type: application/json' \
                             -d '${payload}' || echo '[WARN] Result server unreachable'
                     """

@@ -15,7 +15,7 @@ sysbus.usart2 CreateFileBackend $uart_log true
 
 start
 
-# Chạy tối đa 60 giây
-emulation RunFor "00:00:60"
+# Chạy tối đa 30 giây
+emulation RunFor "00:00:30"
 
 quit

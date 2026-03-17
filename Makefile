@@ -1,42 +1,46 @@
-TARGET   := lab01-gpio
-BUILD    := build
+TARGET = main
+SRCS = main.s
 
-CC       := arm-none-eabi-gcc
-SIZE     := arm-none-eabi-size
+OBJS =  $(addsuffix .o, $(basename $(SRCS)))
 
-CFLAGS   := -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard \
-            -O2 -Wall -Wextra \
-            -ffunction-sections -fdata-sections \
-            -Isrc
+LINKER_SCRIPT = stm32.ld
 
-LDFLAGS  := -Tsrc/stm32f407.ld \
-            -Wl,--gc-sections \
-            -nostartfiles \
-            -specs=nosys.specs
+CFLAGS += -fno-common -Wall -O0 -g3 -mcpu=cortex-m3 -mthumb
+LDFLAGS += -nostartfiles -T$(LINKER_SCRIPT)
 
-SRCS     := src/main.c \
-            src/uart.c \
-            src/startup_stm32f407.s
+CROSS_COMPILE = arm-none-eabi-
+CC = $(CROSS_COMPILE)gcc
+OBJDUMP = $(CROSS_COMPILE)objdump
+OBJCOPY = $(CROSS_COMPILE)objcopy
+SIZE = $(CROSS_COMPILE)size
 
-OBJS     := $(patsubst %.c, $(BUILD)/%.o, $(filter %.c, $(SRCS))) \
-            $(patsubst %.s, $(BUILD)/%.o, $(filter %.s, $(SRCS)))
+all: clean $(SRCS) build size
+	@echo "Successfully finished..."
 
-.PHONY: all clean
+build: $(TARGET).elf $(TARGET).hex $(TARGET).bin $(TARGET).lst
 
-all: $(BUILD)/$(TARGET).elf
+$(TARGET).elf: $(OBJS)
+	@$(CC) $(LDFLAGS) $(OBJS) -o $@
 
-$(BUILD)/$(TARGET).elf: $(OBJS)
-	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
-	$(SIZE) $@
+%.o: %.s
+	@echo "Building" $<
+	@$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+%.hex: %.elf
+	@$(OBJCOPY) -O ihex $< $@
 
-$(BUILD)/%.o: %.s
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+%.bin: %.elf
+	@$(OBJCOPY) -O binary $< $@
+
+%.lst: %.elf
+	@$(OBJDUMP) -x -S $(TARGET).elf > $@
+
+size: $(TARGET).elf
+	@$(SIZE) $(TARGET).elf
 
 clean:
-	rm -rf $(BUILD)
+	@echo "Cleaning..."
+	@rm -f $(TARGET).elf $(TARGET).bin $(TARGET).hex $(TARGET).lst $(TARGET).o
+
+.PHONY: all build size clean
+

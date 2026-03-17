@@ -20,8 +20,8 @@ def message(data):
         print('I received a message!')
 
 #sio.connect('http://localhost:4040')
-#sio.connect('http://10.144.82.108:4040')
-sio.connect(sys.argv[1])
+sio.connect('http://47.131.91.151:4040')
+# sio.connect(sys.argv[1])
 
 
 #workspaceurl = re.sub("@[0-9]","", sys.argv[5])

@@ -2,80 +2,70 @@ pipeline {
     agent { label 'renode-agent' }
 
     options {
-        timeout(time: 15, unit: 'MINUTES')
-        buildDiscarder(logRotator(numToKeepStr: '100'))
+        timeout(time: 5, unit: 'MINUTES')
         timestamps()
         ansiColor('xterm')
-        skipDefaultCheckout(true)
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
+                sh 'ls -la'
             }
         }
 
-        stage('Build firmware') {
+        stage('Build Firmware') {
             steps {
+                echo '[CI] Building firmware'
                 sh '''
                     set -e
-                    make -f makefile clean
-                    make -f makefile -j$(nproc)
+                    make clean
+                    make -j$(nproc)
                     arm-none-eabi-size main.elf || true
                 '''
             }
         }
 
-        stage('Robot Tests (Renode)') {
+        stage('Run Renode Tests') {
             steps {
+                echo '[CI] Running Renode + Robot tests'
                 sh '''
                     set -e
-                    rm -rf robot-results output || true
+                    rm -rf robot-results
                     mkdir -p robot-results
 
-                    renode-test Testing.robot
+                    timeout 90 renode-test Testing.robot || true
 
-                    # Renode default output is usually output/tests/
-                    if [ -f output/tests/robot_output.xml ]; then
-                      cp -f output/tests/robot_output.xml robot-results/robot_output.xml
-                      cp -f output/tests/log.html        robot-results/log.html
-                      cp -f output/tests/report.html     robot-results/report.html
-                    else
-                      OUT_XML="$(ls -1 output/**/robot_output.xml 2>/dev/null | head -n 1 || true)"
-                      if [ -n "$OUT_XML" ]; then
-                        OUT_DIR="$(dirname "$OUT_XML")"
-                        cp -f "$OUT_DIR/robot_output.xml" robot-results/robot_output.xml
-                        cp -f "$OUT_DIR/log.html"        robot-results/log.html
-                        cp -f "$OUT_DIR/report.html"     robot-results/report.html
+                    # renode-test outputs to workspace root by default
+                    for f in robot_output.xml log.html report.html; do
+                      if [ -f "$f" ]; then
+                        cp -f "$f" robot-results/
                       fi
-                    fi
+                    done
 
-                    # Copies at workspace root for simple artifact URLs
-                    cp -f robot-results/robot_output.xml ./robot_output.xml 2>/dev/null || true
-                    cp -f robot-results/log.html        ./log.html         2>/dev/null || true
-                    cp -f robot-results/report.html     ./report.html      2>/dev/null || true
+                    ls -la robot_output.xml log.html report.html robot-results/ 2>/dev/null || true
                 '''
-            }
-            post {
-                always {
-                    script {
-                        try {
-                            robot(
-                                outputPath: 'robot-results',
-                                outputFileName: 'robot_output.xml',
-                                logFileName: 'log.html',
-                                reportFileName: 'report.html'
-                            )
-                        } catch (ignored) {
-                            echo "Robot plugin not available; archiving artifacts only."
-                        }
-                    }
-                    archiveArtifacts artifacts: '*.xml, *.html, *.elf, *.bin, *.hex, *.lst', fingerprint: true, allowEmptyArchive: true
-                    archiveArtifacts artifacts: 'robot-results/*', fingerprint: true, allowEmptyArchive: true
-                }
             }
         }
     }
-}
 
+    post {
+        always {
+            script {
+                try {
+                    robot(
+                        outputPath: '.',
+                        outputFileName: 'robot_output.xml',
+                        logFileName: 'log.html',
+                        reportFileName: 'report.html'
+                    )
+                } catch (ignored) {
+                    echo '[CI] Robot plugin publish skipped.'
+                }
+            }
+            archiveArtifacts artifacts: 'robot_output.xml, log.html, report.html', fingerprint: true, allowEmptyArchive: true
+            archiveArtifacts artifacts: '*.elf', fingerprint: true, allowEmptyArchive: true
+        }
+    }
+}

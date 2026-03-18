@@ -34,7 +34,17 @@ sio.connect(server_url)
 
 #workspaceurl = re.sub("@[0-9]","", sys.argv[5])
 
-sendMsg = {"BuildID":sys.argv[2], "Branch":sys.argv[3], "CommitID":sys.argv[4] , "Workspace":sys.argv[5], "Module":sys.argv[6]}
+sendMsg = {
+        "BuildID": sys.argv[2],
+        "Branch": sys.argv[3],
+        "CommitID": sys.argv[4],
+        "Workspace": sys.argv[5],
+        "Module": sys.argv[6],
+        # Jenkins-native fields (helps server call correct API paths, esp. multibranch)
+        "BuildURL": os.environ.get("BUILD_URL", ""),
+        "JobName": os.environ.get("JOB_NAME", ""),
+        "BuildNumber": os.environ.get("BUILD_NUMBER", ""),
+}
 
 time.sleep(1)
 print("Emitting message to", server_url, "payload:", sendMsg)

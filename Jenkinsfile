@@ -77,7 +77,8 @@ pipeline {
 
                         # sendSync.py uses sys.argv[2..6], so argv[1] is a placeholder
                         export SYNC_SERVER_URL="${SYNC_SERVER_URL}"
-                        "$PY" sendSync.py _ "${BUILD_ID}" "${BRANCH_NAME:-unknown}" "${GIT_COMMIT:-unknown}" "${WORKSPACE}" "${MODULE}" || true
+                        # Ensure we run in repo root so sendSync.py is found
+                        "$PY" -u sendSync.py _ "${BUILD_ID}" "${BRANCH_NAME:-unknown}" "${GIT_COMMIT:-unknown}" "${WORKSPACE}" "${MODULE}" || true
                     '''
                 } catch (ignored) {
                     echo '[CI] sendSync.py notification skipped.'

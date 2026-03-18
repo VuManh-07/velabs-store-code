@@ -58,7 +58,23 @@ pipeline {
     post {
         always {
             script {
+                try {
+                    robot(
+                        outputPath: '.',
+                        outputFileName: 'robot_output.xml',
+                        logFileName: 'log.html',
+                        reportFileName: 'report.html'
+                    )
+                } catch (ignored) {
+                    echo '[CI] Robot plugin publish skipped.'
+                }
+            }
+            archiveArtifacts artifacts: 'robot_output.xml, log.html, report.html', fingerprint: true, allowEmptyArchive: true
+            archiveArtifacts artifacts: '*.elf', fingerprint: true, allowEmptyArchive: true
+
+            script {
                 // Notify external server (best-effort, do not fail the build)
+                // Run AFTER archiving so Jenkins artifact URLs are available.
                 try {
                     sh '''
                         set +e
@@ -77,27 +93,12 @@ pipeline {
 
                         # sendSync.py uses sys.argv[2..6], so argv[1] is a placeholder
                         export SYNC_SERVER_URL="${SYNC_SERVER_URL}"
-                        # Ensure we run in repo root so sendSync.py is found
                         "$PY" -u sendSync.py _ "${BUILD_ID}" "${BRANCH_NAME:-unknown}" "${GIT_COMMIT:-unknown}" "${WORKSPACE}" "${MODULE}" || true
                     '''
                 } catch (ignored) {
                     echo '[CI] sendSync.py notification skipped.'
                 }
             }
-            script {
-                try {
-                    robot(
-                        outputPath: '.',
-                        outputFileName: 'robot_output.xml',
-                        logFileName: 'log.html',
-                        reportFileName: 'report.html'
-                    )
-                } catch (ignored) {
-                    echo '[CI] Robot plugin publish skipped.'
-                }
-            }
-            archiveArtifacts artifacts: 'robot_output.xml, log.html, report.html', fingerprint: true, allowEmptyArchive: true
-            archiveArtifacts artifacts: '*.elf', fingerprint: true, allowEmptyArchive: true
         }
     }
 }

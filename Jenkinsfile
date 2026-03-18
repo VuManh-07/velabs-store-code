@@ -7,6 +7,11 @@ pipeline {
         ansiColor('xterm')
     }
 
+    parameters {
+        string(name: 'MODULE', defaultValue: 'embedded-branch', description: 'Module name sent to sync server')
+        string(name: 'SYNC_SERVER_URL', defaultValue: 'http://47.131.91.151:4040', description: 'Socket.IO server URL for sendSync.py')
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -52,6 +57,32 @@ pipeline {
 
     post {
         always {
+            script {
+                // Notify external server (best-effort, do not fail the build)
+                try {
+                    sh '''
+                        set +e
+                        if command -v python3 >/dev/null 2>&1; then
+                          PY=python3
+                        elif command -v python >/dev/null 2>&1; then
+                          PY=python
+                        else
+                          echo "[CI] Python not found; skip sendSync.py"
+                          exit 0
+                        fi
+
+                        # Install dependency for socketio client (best-effort)
+                        "$PY" -m pip --version >/dev/null 2>&1 || true
+                        "$PY" -m pip install --user -q "python-socketio[client]" >/dev/null 2>&1 || true
+
+                        # sendSync.py uses sys.argv[2..6], so argv[1] is a placeholder
+                        export SYNC_SERVER_URL="${SYNC_SERVER_URL}"
+                        "$PY" sendSync.py _ "${BUILD_ID}" "${BRANCH_NAME:-unknown}" "${GIT_COMMIT:-unknown}" "${WORKSPACE}" "${MODULE}" || true
+                    '''
+                } catch (ignored) {
+                    echo '[CI] sendSync.py notification skipped.'
+                }
+            }
             script {
                 try {
                     robot(

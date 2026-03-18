@@ -8,7 +8,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'MODULE', defaultValue: 'embedded-branch', description: 'Module name sent to sync server')
+        string(name: 'MODULE', defaultValue: 'VI_XU_LY', description: 'Module/subject code sent to sync server (e.g. VI_XU_LY for Robot XML)')
         string(name: 'SYNC_SERVER_URL', defaultValue: 'http://47.131.91.151:4040', description: 'Socket.IO server URL for sendSync.py')
     }
 
